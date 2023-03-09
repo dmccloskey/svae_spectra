@@ -24,8 +24,8 @@ batch_size = 256
 epochs = 351
 annealing_epochs = 0
 best_loss = sys.maxsize
-
-
+kwargs = {'batch_size': batch_size, 'num_workers': 4, 'pin_memory': True}
+BASE_DIR = ""
 CHARSET = [' ',
  '#',
  '%',
@@ -93,10 +93,7 @@ CHARSET = [' ',
  't',
  'u',
  'y']
-
-max_len = 250
 PADLENGTH = 250
-
 
 class OneHotFeaturizer(object):
     def __init__(self, charset=CHARSET, padlength=PADLENGTH):
@@ -133,29 +130,17 @@ class OneHotFeaturizer(object):
     def decode_smiles_from_index(self, vec):
         return ''.join(map(lambda x: CHARSET[x], vec)).strip()
 
-
 ohf = OneHotFeaturizer()
-
 
 def collate_y(batch):
     X, y = map(list, zip(*batch))
     return X, torch.FloatTensor(ohf.featurize(y))
-
 
 def collate_x_y(batch):
     X, y = map(list, zip(*batch))
     X = torch.FloatTensor(np.stack([np.array(s) for s in X]))
     a = ohf.featurize(y)
     return X, torch.FloatTensor(ohf.featurize(y))
-
-
-kwargs = {'batch_size': batch_size, 'num_workers': 4, 'pin_memory': True}
-
-root = "."
-
-
-BASE_DIR = '/home/svegal'
-
 
 def align_spectra(resolution, max_mz, row):
     numbers = np.arange(0, max_mz, step=resolution)
@@ -168,12 +153,10 @@ def align_spectra(resolution, max_mz, row):
             result[-1] = i[1]
     return np.array(result)
 
-
 def parse_spectrum(m):
     spec = align_spectra(0.1, 1100, m)
     spec = np.log(1. + spec)
     return spec
-
 
 def save_checkpoint(model_obj, is_best, model_name, folder=f'{BASE_DIR}/saved_models', filename='checkpoint_{}.pth.tar'):
     if not os.path.isdir(folder):
@@ -182,7 +165,6 @@ def save_checkpoint(model_obj, is_best, model_name, folder=f'{BASE_DIR}/saved_mo
     if is_best:
         shutil.copyfile(os.path.join(folder, filename.format(model_name)),
                         os.path.join(folder, 'model_best_{}.pth.tar'.format(model_name)))
-
 
 def load_checkpoint(model_obj, model_name, is_best=True):
     if is_best:
@@ -194,11 +176,9 @@ def load_checkpoint(model_obj, model_name, is_best=True):
     model_obj.model.distributions.load_state_dict(checkpoint['distributions'])
     model_obj.model.distributions.eval()
 
-
 def parse_spectrum_string(row):
     string = row['spectrum']
     return np.array([(float(s.split(':')[0]), float(s.split(':')[1])) for s in string.split()])
-
 
 def save_reconstruction(model_obj, data_loader, n_share, suffix=''):
     print('Reconstruction')
@@ -239,7 +219,6 @@ def save_reconstruction(model_obj, data_loader, n_share, suffix=''):
         save_cpu('latent_all', z_full['z'])
         return
 
-
 def save_reconstruction_spectrum(model_obj, data_loader, n_share, suffix=''):
     print('Reconstruction')
 
@@ -270,21 +249,17 @@ def save_reconstruction_spectrum(model_obj, data_loader, n_share, suffix=''):
         save_cpu('fp_from_fp', recon_down_down)
         return
 
-
 def is_c_string(smiles):
     if not len(smiles):
         return False
     return float(len([s for s in smiles if s.lower() == 'c'])) / len(smiles) > 0.8
 
-
 def is_valid_molecule(smiles_pred, smiles_true):
     mol_smiles = Chem.MolFromSmiles(smiles_pred)
     return (mol_smiles is not None)
 
-
 def decode_smiles_from_indexes(vec):
     return "".join(map(lambda x: CHARSET[x], vec)).strip()
-
 
 def from_one_hot_array(vec):
     oh = np.where(vec == 1)
@@ -292,14 +267,12 @@ def from_one_hot_array(vec):
         return None
     return int(oh[0][0])
 
-
 def first_valid(recons, true, N_attempts):
     for j in range(N_attempts):
         sampled = recons[j].reshape(1, 250, len(CHARSET)).argmax(axis=2)[0]
         smiles = decode_smiles_from_indexes(sampled)
         if is_valid_molecule(smiles, true):
             return smiles
-
 
 def valid_reconstruction_attempts(model_obj, data_loader, n_share, suffix=''):
     print('Reconstruction valid')
@@ -338,7 +311,6 @@ def valid_reconstruction_attempts(model_obj, data_loader, n_share, suffix=''):
         np.save(f'{BASE_DIR}/reconstructions/{model_obj.name}_{n_share}_{keyword}{suffix}_valid_smiles.npy', np.array(smiles_all))
         return
 
-
 def evaluate_accuracy(model_obj, data_loader):
     correct_full, correct_up, correct_down = [], [], []
     criterion = torch.nn.BCELoss()
@@ -365,7 +337,6 @@ def evaluate_accuracy(model_obj, data_loader):
 
     return np.mean(correct_full), np.mean(correct_up), np.mean(correct_down)
 
-
 def get_beta(epoch, i):
     if epoch < annealing_epochs:
         N_mini_batches = int(N_data / batch_size)
@@ -373,9 +344,7 @@ def get_beta(epoch, i):
     else:
         return 1.0
 
-
 current_beta = 0
-
 
 def run_semisupervised(model_obj, no_labels):
     global best_loss, current_beta
@@ -511,10 +480,11 @@ def run_semisupervised(model_obj, no_labels):
         best_loss = min(ac_up_test, best_loss)
         # save_checkpoint(model_obj, is_best, '{}_{}_{}'.format(model_obj.name, no_labels, keyword))
         n_eps = 10
-        if no_labels_share > 6:
-            n_eps = 100
-        elif no_labels_share == 5.0:
-            n_eps = 1
+        # NameError: name 'no_labels_share' is not defined
+        # if no_labels_share > 6:
+        #     n_eps = 100
+        # elif no_labels_share == 5.0:
+        #     n_eps = 1
         if epoch % n_eps == 0:
             save_checkpoint(model_obj, False, f'{model_obj.name}_{no_labels}_{keyword}_{epoch}')
 
@@ -546,7 +516,7 @@ def run_semisupervised(model_obj, no_labels):
             'loss_spectra_train': accuracies_up_train,
             'loss_fp_train': accuracies_down_train,
         })
-        result.to_csv('{}_{}_{}.csv'.format(model_obj.name, no_labels, keyword), index=None)
+        result.to_csv('{}/{}_{}_{}.csv'.format(BASE_DIR, model_obj.name, no_labels, keyword), index=None)
 
     result = pd.DataFrame({
         'train_loss': train_losses,
@@ -566,8 +536,7 @@ def run_semisupervised(model_obj, no_labels):
         'loss_spectra_train': accuracies_up_train,
         'loss_fp_train': accuracies_down_train,
     })
-    result.to_csv('{}_{}_{}.csv'.format(model_obj.name, no_labels, keyword), index=None)
-
+    result.to_csv('{}/{}_{}_{}.csv'.format(BASE_DIR, model_obj.name, no_labels, keyword), index=None)
 
 class CSVFileDataset(torch.utils.data.dataset.Dataset):
 
@@ -589,7 +558,6 @@ class CSVFileDataset(torch.utils.data.dataset.Dataset):
     def __getitem__(self, idx):
         return self.parse_spectrum_in(self.X[idx]), self.y[idx]
 
-
 class SmilesDataset(torch.utils.data.dataset.Dataset):
     def __init__(self, y):
         self.y = y
@@ -608,10 +576,8 @@ def load_smiles_to_fp(path):
             smiles_to_fingerprints[smiles] = fp
     return smiles_to_fingerprints
 
-
 def parse_fp_orbitrap(fp):
     return np.array([int(i) for i in fp])
-
 
 def get_samplers(N_data):
     indices = list(range(N_data))
@@ -625,133 +591,139 @@ def get_samplers(N_data):
     supervised_sampler = SubsetRandomSampler(indices)
     return unsupervised_sampler_x, unsupervised_sampler_y, supervised_sampler
 
+# RuntimeError:\n\t\tAn attempt has been made to start a new process before the\n\t\tcurrent process has finished its bootstrapping phase.\n\n\t\tThis probably means that you are not using fork to start your\n\t\tchild processes and you have forgotten to use the proper idiom\n\t\tin the main module:\n\n\t\t\tif __name__ == '__main__':\n\t\t\t\tfreeze_support()\n\t\t\t\t...\n\n\t\tThe "freeze_support()" line can be omitted if the program\n\t\tis not going to be frozen to produce an executable.
+if __name__ == '__main__':
 
-ap = argparse.ArgumentParser()
+    torch.cuda.empty_cache() # RuntimeError: CUDA out of memory. 
 
-ap.add_argument("-t", "--train", required=True, help="Train set, a csv file with comma as delimiter, required columns 'spectrum' and 'SMILES' ('fp_short' if training with the fingerprints)")
-ap.add_argument("-v", "--test", required=True, help="Test set, a csv file with comma as delimiter, required columns 'spectrum' and 'SMILES' ('fp_short' if training with the fingerprints)")
-ap.add_argument("-u", "--train_molecules", required=False, help="Unsupervised molecule train set, required columns 'SMILES'. If not provided, the algorithm runs in supervised mode")
-ap.add_argument("-m", "--model", required=True, help="Model name (SVAE or JMVAE). JMVAE only runs in supervised mode even if train_molecules provided")
-ap.add_argument("-k", "--keyword", required=False, default='molecules', help="Additional keyword for the trained model name. Default 'molecules'")
-ap.add_argument("-l", "--load", required=False, help="Trained model name to evaluate or continue the training")
-ap.add_argument("-d", "--device", required=False, default='cpu', help="Device name, default cpu")
-ap.add_argument("-e", "--eval", action="store_true", help="If eval flag is set, model predicts spectra from molecules for 1000 samples from the test set and predicts molecules from spectra")
-args = vars(ap.parse_args())
+    ap = argparse.ArgumentParser()
+    ap.add_argument("-t", "--train", required=True, help="Train set, a csv file with comma as delimiter, required columns 'spectrum' and 'SMILES' ('fp_short' if training with the fingerprints)")
+    ap.add_argument("-v", "--test", required=True, help="Test set, a csv file with comma as delimiter, required columns 'spectrum' and 'SMILES' ('fp_short' if training with the fingerprints)")
+    ap.add_argument("-u", "--train_molecules", required=False, help="Unsupervised molecule train set, required columns 'SMILES'. If not provided, the algorithm runs in supervised mode")
+    ap.add_argument("-m", "--model", required=True, help="Model name (SVAE or JMVAE). JMVAE only runs in supervised mode even if train_molecules provided")
+    ap.add_argument("-k", "--keyword", required=False, default='molecules', help="Additional keyword for the trained model name. Default 'molecules'")
+    ap.add_argument("-l", "--load", required=False, help="Trained model name to evaluate or continue the training")
+    ap.add_argument("-d", "--device", required=False, default='cpu', help="Device name, default cpu")
+    ap.add_argument("-e", "--eval", action="store_true", help="If eval flag is set, model predicts spectra from molecules for 1000 samples from the test set and predicts molecules from spectra")
+    ap.add_argument("-p", "--path", required=False, help="Path to saved")
+    args = vars(ap.parse_args())
 
-keyword = args['keyword']
-print('Keyword', keyword)
+    keyword = args['keyword']
+    print('Keyword', keyword)
 
-df_metid_train = pd.read_csv(args['train'])
-df_metid_test = pd.read_csv(args['test'])
-if args['train_molecules']:
-    unsup_molecules = list(pd.read_csv(args['train_molecules'])['SMILES'])
-    is_sup = False
-else:
-    is_sup = True
+    BASE_DIR = args['path']
 
-indices_train_ac = np.random.choice(len(df_metid_train), len(df_metid_test))
-df_metid_train_ac = df_metid_train.iloc[indices_train_ac]
-df_metid_train_ac = df_metid_train_ac.reset_index()
+    df_metid_train = pd.read_csv(args['train'])
+    df_metid_test = pd.read_csv(args['test'])
+    if args['train_molecules']:
+        unsup_molecules = list(pd.read_csv(args['train_molecules'])['SMILES'])
+        is_sup = False
+    else:
+        is_sup = True
 
-N_data = len(df_metid_train)
-unsupervised_sampler_x, unsupervised_sampler_y, supervised_sampler = get_samplers(N_data)
+    indices_train_ac = np.random.choice(len(df_metid_train), len(df_metid_test))
+    df_metid_train_ac = df_metid_train.iloc[indices_train_ac]
+    df_metid_train_ac = df_metid_train_ac.reset_index()
 
-device = args['device']
+    N_data = len(df_metid_train)
+    unsupervised_sampler_x, unsupervised_sampler_y, supervised_sampler = get_samplers(N_data)
 
-train_loader_supervised = torch.utils.data.DataLoader(
-    CSVFileDataset(df_metid_train['spectrum'], df_metid_train['SMILES']),
-    sampler=supervised_sampler, collate_fn=collate_x_y, **kwargs
-)
-if is_sup or args['model'] == 'JMVAE':
-    train_loader_unsupervised_x = torch.utils.data.DataLoader(
+    device = args['device']
+
+    train_loader_supervised = torch.utils.data.DataLoader(
         CSVFileDataset(df_metid_train['spectrum'], df_metid_train['SMILES']),
-        sampler=unsupervised_sampler_x, collate_fn=collate_x_y, **kwargs
+        sampler=supervised_sampler, collate_fn=collate_x_y, **kwargs
     )
-    train_loader_unsupervised_y = torch.utils.data.DataLoader(
-        CSVFileDataset(df_metid_train['spectrum'], df_metid_train['SMILES']),
-        sampler=unsupervised_sampler_y, collate_fn=collate_x_y, **kwargs
-    )
-else:
-    x_array = list(df_metid_train['spectrum'])
-    np.random.shuffle(x_array)
-    train_loader_unsupervised_x = torch.utils.data.DataLoader(
-        CSVFileDataset(
-            x_array,
-            [list(df_metid_train['fp_short'])[0]]*len(x_array),
-        ),
-        shuffle=False, collate_fn=collate_x_y, **kwargs
-    )
-    y_array = list(df_metid_train['SMILES']) + unsup_molecules
-    np.random.shuffle(y_array)
-    train_loader_unsupervised_y = torch.utils.data.DataLoader(
-        SmilesDataset(
-            y_array,
-        ),
-        shuffle=False, collate_fn=collate_y, **kwargs
-    )
-
-test_loader_supervised = torch.utils.data.DataLoader(
-    CSVFileDataset(df_metid_test['spectrum'], df_metid_test['SMILES']),
-    shuffle=False, collate_fn=collate_x_y, **kwargs
-)
-test_loader_unsupervised_x = torch.utils.data.DataLoader(
-    CSVFileDataset(df_metid_test['spectrum'], df_metid_test['SMILES']),
-    shuffle=False, collate_fn=collate_x_y, **kwargs
-)
-test_loader_unsupervised_y = torch.utils.data.DataLoader(
-    CSVFileDataset(df_metid_test['spectrum'], df_metid_test['SMILES']),
-    shuffle=False, collate_fn=collate_x_y, **kwargs
-)
-
-train_loader_train_ac = torch.utils.data.DataLoader(
-    CSVFileDataset(df_metid_train_ac['spectrum'], df_metid_train_ac['SMILES']),
-    shuffle=False, collate_fn=collate_x_y, **kwargs
-)
-
-models_classes = {
-    'SVAE': SpectraVAE_terms,
-    'JMVAE': JMVAE,
-}
-
-model_class = models_classes[args['model']]
-
-def init_model(model_class):
-    p_x = GeneratorX()
-    p_y = GeneratorY()
-
-    q_x = InferenceX()
-    q_y = InferenceY()
-
-    q_star_y = InferenceY_missing()
-    q_star_x = InferenceX_missing()
-
-    q = InferenceJoint()
-
-    return model_class(z_dim, {"lr": 1e-5}, q_x, q_y, p_x, p_y, q=q, q_star_y=q_star_y, q_star_x=q_star_x, device=device)
-
-
-model_obj = init_model(model_class)
-
-no_labels = int(is_sup)
-print('Is supervised', bool(no_labels))
-
-if args['eval']:
-    name = args['load']
-    load_checkpoint(model_obj, name, is_best=False)
+    if is_sup or args['model'] == 'JMVAE':
+        train_loader_unsupervised_x = torch.utils.data.DataLoader(
+            CSVFileDataset(df_metid_train['spectrum'], df_metid_train['SMILES']),
+            sampler=unsupervised_sampler_x, collate_fn=collate_x_y, **kwargs
+        )
+        train_loader_unsupervised_y = torch.utils.data.DataLoader(
+            CSVFileDataset(df_metid_train['spectrum'], df_metid_train['SMILES']),
+            sampler=unsupervised_sampler_y, collate_fn=collate_x_y, **kwargs
+        )
+    else:
+        x_array = list(df_metid_train['spectrum'])
+        np.random.shuffle(x_array)
+        train_loader_unsupervised_x = torch.utils.data.DataLoader(
+            CSVFileDataset(
+                x_array,
+                [list(df_metid_train['fp_short'])[0]]*len(x_array),
+            ),
+            shuffle=False, collate_fn=collate_x_y, **kwargs
+        )
+        y_array = list(df_metid_train['SMILES']) + unsup_molecules
+        np.random.shuffle(y_array)
+        train_loader_unsupervised_y = torch.utils.data.DataLoader(
+            SmilesDataset(
+                y_array,
+            ),
+            shuffle=False, collate_fn=collate_y, **kwargs
+        )
 
     test_loader_supervised = torch.utils.data.DataLoader(
-        CSVFileDataset(df_metid_test['spectrum'][:1000], df_metid_test['SMILES'][:1000]),
-        shuffle=False, collate_fn=collate_x_y, batch_size=1000
+        CSVFileDataset(df_metid_test['spectrum'], df_metid_test['SMILES']),
+        shuffle=False, collate_fn=collate_x_y, **kwargs
     )
+    test_loader_unsupervised_x = torch.utils.data.DataLoader(
+        CSVFileDataset(df_metid_test['spectrum'], df_metid_test['SMILES']),
+        shuffle=False, collate_fn=collate_x_y, **kwargs
+    )
+    test_loader_unsupervised_y = torch.utils.data.DataLoader(
+        CSVFileDataset(df_metid_test['spectrum'], df_metid_test['SMILES']),
+        shuffle=False, collate_fn=collate_x_y, **kwargs
+    )
+
     train_loader_train_ac = torch.utils.data.DataLoader(
-        CSVFileDataset(df_metid_train_ac['spectrum'][:1000], df_metid_train_ac['SMILES'][:1000]),
-        shuffle=False, collate_fn=collate_x_y, batch_size=1000
+        CSVFileDataset(df_metid_train_ac['spectrum'], df_metid_train_ac['SMILES']),
+        shuffle=False, collate_fn=collate_x_y, **kwargs
     )
-    save_reconstruction_spectrum(model_obj, test_loader_supervised, n_share, suffix=f'_{epoch}_test')
-    valid_reconstruction_attempts(model_obj, test_loader_supervised, n_share, suffix=f'_{epoch}_test')
-else:
-    print('Started learning')
-    if args['load']:
+
+    models_classes = {
+        'SVAE': SpectraVAE_terms,
+        'JMVAE': JMVAE,
+    }
+
+    model_class = models_classes[args['model']]
+
+    def init_model(model_class):
+        p_x = GeneratorX()
+        p_y = GeneratorY()
+
+        q_x = InferenceX()
+        q_y = InferenceY()
+
+        q_star_y = InferenceY_missing()
+        q_star_x = InferenceX_missing()
+
+        q = InferenceJoint()
+
+        return model_class(z_dim, {"lr": 1e-5}, q_x, q_y, p_x, p_y, q=q, q_star_y=q_star_y, q_star_x=q_star_x, device=device)
+
+
+    model_obj = init_model(model_class)
+
+    no_labels = int(is_sup)
+    print('Is supervised', bool(no_labels))
+
+    if args['eval']:
         name = args['load']
         load_checkpoint(model_obj, name, is_best=False)
-    run_semisupervised(model_obj, no_labels)
+
+        test_loader_supervised = torch.utils.data.DataLoader(
+            CSVFileDataset(df_metid_test['spectrum'][:1000], df_metid_test['SMILES'][:1000]),
+            shuffle=False, collate_fn=collate_x_y, batch_size=1000
+        )
+        train_loader_train_ac = torch.utils.data.DataLoader(
+            CSVFileDataset(df_metid_train_ac['spectrum'][:1000], df_metid_train_ac['SMILES'][:1000]),
+            shuffle=False, collate_fn=collate_x_y, batch_size=1000
+        )
+        save_reconstruction_spectrum(model_obj, test_loader_supervised, n_share, suffix=f'_{epoch}_test')
+        valid_reconstruction_attempts(model_obj, test_loader_supervised, n_share, suffix=f'_{epoch}_test')
+    else:
+        print('Started learning')
+        if args['load']:
+            name = args['load']
+            load_checkpoint(model_obj, name, is_best=False)
+        run_semisupervised(model_obj, no_labels)
