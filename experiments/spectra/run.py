@@ -25,7 +25,7 @@ epochs = 351
 annealing_epochs = 0
 best_loss = sys.maxsize
 kwargs = {'batch_size': batch_size, 'num_workers': 4, 'pin_memory': True}
-BASE_DIR = ""
+BASE_DIR = "/home/domccl/svae"
 CHARSET = [' ',
  '#',
  '%',
